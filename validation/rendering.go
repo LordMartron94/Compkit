@@ -3,9 +3,10 @@ package validation
 import (
 	"fmt"
 	"io"
-	"lexarch"
 	"strings"
 )
+
+type columnAdvanceFn func(rune, int) int
 
 /*
 RenderValidationEntriesWithContext writes a formatted report of validation entries with source context.
@@ -21,7 +22,7 @@ func RenderValidationEntriesWithContext(
 	w io.Writer,
 	source []rune,
 	entries *ValidationEntries,
-	advanceFn lexarch.ColumnAdvanceFn[rune],
+	advanceFn columnAdvanceFn,
 ) {
 	if w == nil || entries == nil {
 		return
@@ -33,7 +34,12 @@ func RenderValidationEntriesWithContext(
 	}
 
 	if advanceFn == nil {
-		advanceFn = lexarch.ColumnAdvanceRune(4)
+		advanceFn = func(r rune, col int) int {
+			if r == '\t' {
+				return col + 4
+			}
+			return col + 1
+		}
 	}
 
 	lines := splitLinesRunes(source)
@@ -47,7 +53,7 @@ func RenderValidationEntriesWithContext(
 	fmt.Fprintln(w, "======================")
 }
 
-func renderValidationEntry(w io.Writer, entry ValidationEntry, lines [][]rune, advanceFn lexarch.ColumnAdvanceFn[rune]) {
+func renderValidationEntry(w io.Writer, entry ValidationEntry, lines [][]rune, advanceFn columnAdvanceFn) {
 	fmt.Fprintf(w, "[%v] %s — %s\n", entry.Severity, entry.Code, entry.Message)
 	if entry.Note != nil && *entry.Note != "" {
 		fmt.Fprintf(w, "      Note: %s\n", *entry.Note)
@@ -72,7 +78,7 @@ func renderValidationEntry(w io.Writer, entry ValidationEntry, lines [][]rune, a
 	renderDiagnosticContext(w, lines, startL, startC, endL, endC, advanceFn)
 }
 
-func renderDiagnosticContext(w io.Writer, lines [][]rune, startL, startC, endL, endC int, advanceFn lexarch.ColumnAdvanceFn[rune]) {
+func renderDiagnosticContext(w io.Writer, lines [][]rune, startL, startC, endL, endC int, advanceFn columnAdvanceFn) {
 	if !isValidSpanRange(startL, endL, len(lines)) {
 		renderInvalidSpanBlock(w, lines, startL, startC, endL, endC, advanceFn)
 		return
@@ -102,7 +108,7 @@ func renderSingleLineHighlight(
 	w io.Writer,
 	line []rune,
 	lineNum, startCol, endCol int,
-	advanceFn lexarch.ColumnAdvanceFn[rune],
+	advanceFn columnAdvanceFn,
 ) {
 	var sourceBuilder strings.Builder
 	var markerBuilder strings.Builder
@@ -130,7 +136,7 @@ func renderSingleLineHighlight(
 	fmt.Fprintln(w, markerBuilder.String())
 }
 
-func renderMultiLineHighlight(w io.Writer, lines [][]rune, startL, startC, endL, endC int, advanceFn lexarch.ColumnAdvanceFn[rune]) {
+func renderMultiLineHighlight(w io.Writer, lines [][]rune, startL, startC, endL, endC int, advanceFn columnAdvanceFn) {
 	firstLine := lines[startL-1]
 	renderSingleLineHighlight(w, firstLine, startL, startC, len(firstLine)+1, advanceFn)
 
@@ -142,7 +148,7 @@ func renderMultiLineHighlight(w io.Writer, lines [][]rune, startL, startC, endL,
 	renderSingleLineHighlight(w, lastLine, endL, 1, endC, advanceFn)
 }
 
-func renderInvalidSpanBlock(w io.Writer, lines [][]rune, startL, startC, endL, endC int, advanceFn lexarch.ColumnAdvanceFn[rune]) {
+func renderInvalidSpanBlock(w io.Writer, lines [][]rune, startL, startC, endL, endC int, advanceFn columnAdvanceFn) {
 	fmt.Fprintln(w, " ── INVALID OR OUT-OF-BOUNDS SPAN DETECTED ────────────────")
 	fmt.Fprintf(w, "  Requested: %d:%d to %d:%d | Total lines: %d\n", startL, startC, endL, endC, len(lines))
 
