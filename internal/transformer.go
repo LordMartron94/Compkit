@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"cmp"
 	"fmt"
 
 	"compkit/validation"
@@ -10,26 +9,26 @@ import (
 
 // --------------------------------------------------------------- DISPATCHER
 
-type TransformHandler[TObservation cmp.Ordered, TToken, TTokenRole, TNodeKind comparable, TAST any] func(
-	ctx *LSTNodeTransformContext[TObservation, TToken, TTokenRole, TNodeKind, TAST],
-	node *syntaxa.SyntaxaLSTNode[TObservation, TToken, TTokenRole, TNodeKind],
+type TransformHandler[TNodeKind comparable, TAST any] func(
+	ctx *LSTNodeTransformContext[TNodeKind, TAST],
+	node *syntaxa.SyntaxaLSTNode[TNodeKind],
 ) TAST
 
-type NodeTransformDispatcher[TObservation cmp.Ordered, TToken, TTokenRole, TNodeKind comparable, TAST any] struct {
-	handlers           map[TNodeKind]TransformHandler[TObservation, TToken, TTokenRole, TNodeKind, TAST]
+type NodeTransformDispatcher[TNodeKind comparable, TAST any] struct {
+	handlers           map[TNodeKind]TransformHandler[TNodeKind, TAST]
 	populationComplete bool
 }
 
-func NodeTransformDispatcherCreate[TObservation cmp.Ordered, TToken, TTokenRole, TNodeKind comparable, TAST any]() *NodeTransformDispatcher[TObservation, TToken, TTokenRole, TNodeKind, TAST] {
-	return &NodeTransformDispatcher[TObservation, TToken, TTokenRole, TNodeKind, TAST]{
-		handlers: make(map[TNodeKind]TransformHandler[TObservation, TToken, TTokenRole, TNodeKind, TAST]),
+func NodeTransformDispatcherCreate[TNodeKind comparable, TAST any]() *NodeTransformDispatcher[TNodeKind, TAST] {
+	return &NodeTransformDispatcher[TNodeKind, TAST]{
+		handlers: make(map[TNodeKind]TransformHandler[TNodeKind, TAST]),
 	}
 }
 
-func NodeTransformDispatcherRegister[TObservation cmp.Ordered, TToken, TTokenRole, TNodeKind comparable, TAST any](
-	n *NodeTransformDispatcher[TObservation, TToken, TTokenRole, TNodeKind, TAST],
+func NodeTransformDispatcherRegister[TNodeKind comparable, TAST any](
+	n *NodeTransformDispatcher[TNodeKind, TAST],
 	kind TNodeKind,
-	handler TransformHandler[TObservation, TToken, TTokenRole, TNodeKind, TAST],
+	handler TransformHandler[TNodeKind, TAST],
 ) {
 	if n == nil {
 		panic("dispatcher is nil -> cannot register")
@@ -50,8 +49,8 @@ func NodeTransformDispatcherRegister[TObservation cmp.Ordered, TToken, TTokenRol
 	n.handlers[kind] = handler
 }
 
-func NodeTransformDispatcherMarkPopulated[TObservation cmp.Ordered, TToken, TTokenRole, TNodeKind comparable, TAST any](
-	n *NodeTransformDispatcher[TObservation, TToken, TTokenRole, TNodeKind, TAST],
+func NodeTransformDispatcherMarkPopulated[TNodeKind comparable, TAST any](
+	n *NodeTransformDispatcher[TNodeKind, TAST],
 ) {
 	if n == nil {
 		panic("dispatcher is nil -> cannot mark populated")
@@ -60,10 +59,10 @@ func NodeTransformDispatcherMarkPopulated[TObservation cmp.Ordered, TToken, TTok
 	n.populationComplete = true
 }
 
-func nodeTransformDispatcherDispatch[TObservation cmp.Ordered, TToken, TTokenRole, TNodeKind comparable, TAST any](
-	n *NodeTransformDispatcher[TObservation, TToken, TTokenRole, TNodeKind, TAST],
-	ctx *LSTNodeTransformContext[TObservation, TToken, TTokenRole, TNodeKind, TAST],
-	node *syntaxa.SyntaxaLSTNode[TObservation, TToken, TTokenRole, TNodeKind],
+func nodeTransformDispatcherDispatch[TNodeKind comparable, TAST any](
+	n *NodeTransformDispatcher[TNodeKind, TAST],
+	ctx *LSTNodeTransformContext[TNodeKind, TAST],
+	node *syntaxa.SyntaxaLSTNode[TNodeKind],
 ) TAST {
 	var zero TAST
 	if n == nil {
@@ -99,24 +98,24 @@ func nodeTransformDispatcherDispatch[TObservation cmp.Ordered, TToken, TTokenRol
 
 // --------------------------------------------------------------- TRANSFORMER
 
-type LSTNodeTransformContext[TObservation cmp.Ordered, TToken, TTokenRole, TNodeKind comparable, TAST any] struct {
-	dispatcher        *NodeTransformDispatcher[TObservation, TToken, TTokenRole, TNodeKind, TAST]
+type LSTNodeTransformContext[TNodeKind comparable, TAST any] struct {
+	dispatcher        *NodeTransformDispatcher[TNodeKind, TAST]
 	validationEntries *validation.ValidationEntries
 }
 
-func LSTNodeTransformContextCreate[TObservation cmp.Ordered, TToken, TTokenRole, TNodeKind comparable, TAST any](
-	dispatcher *NodeTransformDispatcher[TObservation, TToken, TTokenRole, TNodeKind, TAST],
+func LSTNodeTransformContextCreate[TNodeKind comparable, TAST any](
+	dispatcher *NodeTransformDispatcher[TNodeKind, TAST],
 	validationEntries *validation.ValidationEntries,
-) *LSTNodeTransformContext[TObservation, TToken, TTokenRole, TNodeKind, TAST] {
-	return &LSTNodeTransformContext[TObservation, TToken, TTokenRole, TNodeKind, TAST]{
+) *LSTNodeTransformContext[TNodeKind, TAST] {
+	return &LSTNodeTransformContext[TNodeKind, TAST]{
 		dispatcher:        dispatcher,
 		validationEntries: validationEntries,
 	}
 }
 
-func LSTNodeTransformContextTransform[TObservation cmp.Ordered, TToken, TTokenRole, TNodeKind comparable, TAST any](
-	l *LSTNodeTransformContext[TObservation, TToken, TTokenRole, TNodeKind, TAST],
-	node *syntaxa.SyntaxaLSTNode[TObservation, TToken, TTokenRole, TNodeKind],
+func LSTNodeTransformContextTransform[TNodeKind comparable, TAST any](
+	l *LSTNodeTransformContext[TNodeKind, TAST],
+	node *syntaxa.SyntaxaLSTNode[TNodeKind],
 ) TAST {
 	var zero TAST
 
@@ -142,9 +141,9 @@ func LSTNodeTransformContextTransform[TObservation cmp.Ordered, TToken, TTokenRo
 	return nodeTransformDispatcherDispatch(l.dispatcher, l, node)
 }
 
-func LSTNodeTransformContextReportError[TObservation cmp.Ordered, TToken, TTokenRole, TNodeKind comparable, TAST any](
-	l *LSTNodeTransformContext[TObservation, TToken, TTokenRole, TNodeKind, TAST],
-	node *syntaxa.SyntaxaLSTNode[TObservation, TToken, TTokenRole, TNodeKind],
+func LSTNodeTransformContextReportError[TNodeKind comparable, TAST any](
+	l *LSTNodeTransformContext[TNodeKind, TAST],
+	node *syntaxa.SyntaxaLSTNode[TNodeKind],
 	severity validation.ValidationSeverity,
 	code validation.ValidationCode,
 	message string,

@@ -1,7 +1,6 @@
 package transform
 
 import (
-	"cmp"
 
 	"compkit/internal"
 	"compkit/validation"
@@ -20,9 +19,9 @@ The handler returns the produced AST node (or other client structure).
 Any errors should be reported through the context (validation entries), and the handler
 should return the zero value of TAST when it cannot produce a meaningful result.
 */
-type LSTNodeTransformHandler[TObservation cmp.Ordered, TToken, TTokenRole, TNodeKind comparable, TAST any] func(
-	ctx LSTNodeTransformContext[TObservation, TToken, TTokenRole, TNodeKind, TAST],
-	node *syntaxa.SyntaxaLSTNode[TObservation, TToken, TTokenRole, TNodeKind],
+type LSTNodeTransformHandler[TNodeKind comparable, TAST any] func(
+	ctx LSTNodeTransformContext[TNodeKind, TAST],
+	node *syntaxa.SyntaxaLSTNode[TNodeKind],
 ) TAST
 
 /*
@@ -32,8 +31,8 @@ This is a thin public wrapper over Compkit's internal dispatcher mechanism. The 
 - Keeps the internal representation private (stable API boundary).
 - Presents an explicit, C-style function API (no method receivers for core logic).
 */
-type LSTNodeTransformDispatcher[TObservation cmp.Ordered, TToken, TTokenRole, TNodeKind comparable, TAST any] struct {
-	dispatcher *internal.NodeTransformDispatcher[TObservation, TToken, TTokenRole, TNodeKind, TAST]
+type LSTNodeTransformDispatcher[TNodeKind comparable, TAST any] struct {
+	dispatcher *internal.NodeTransformDispatcher[TNodeKind, TAST]
 }
 
 /*
@@ -42,8 +41,8 @@ LSTNodeTransformContext is the execution context for transforming an LST node tr
 The context is intentionally lightweight and primarily serves as a recursion entry point
 for calling back into the dispatcher.
 */
-type LSTNodeTransformContext[TObservation cmp.Ordered, TToken, TTokenRole, TNodeKind comparable, TAST any] struct {
-	ctx *internal.LSTNodeTransformContext[TObservation, TToken, TTokenRole, TNodeKind, TAST]
+type LSTNodeTransformContext[TNodeKind comparable, TAST any] struct {
+	ctx *internal.LSTNodeTransformContext[TNodeKind, TAST]
 }
 
 /*
@@ -56,9 +55,9 @@ Use cases:
 Time complexity: O(1)
 Space complexity: O(1) (initial map allocation is implementation-defined)
 */
-func LSTNodeTransformDispatcherCreate[TObservation cmp.Ordered, TToken, TTokenRole, TNodeKind comparable, TAST any]() *LSTNodeTransformDispatcher[TObservation, TToken, TTokenRole, TNodeKind, TAST] {
-	return &LSTNodeTransformDispatcher[TObservation, TToken, TTokenRole, TNodeKind, TAST]{
-		dispatcher: internal.NodeTransformDispatcherCreate[TObservation, TToken, TTokenRole, TNodeKind, TAST](),
+func LSTNodeTransformDispatcherCreate[TNodeKind comparable, TAST any]() *LSTNodeTransformDispatcher[TNodeKind, TAST] {
+	return &LSTNodeTransformDispatcher[TNodeKind, TAST]{
+		dispatcher: internal.NodeTransformDispatcherCreate[TNodeKind, TAST](),
 	}
 }
 
@@ -77,19 +76,19 @@ Edge cases:
 Time complexity: O(1) average
 Space complexity: O(1) additional (excluding map growth)
 */
-func LSTNodeTransformDispatcherRegister[TObservation cmp.Ordered, TToken, TTokenRole, TNodeKind comparable, TAST any](
-	dispatcher *LSTNodeTransformDispatcher[TObservation, TToken, TTokenRole, TNodeKind, TAST],
+func LSTNodeTransformDispatcherRegister[TNodeKind comparable, TAST any](
+	dispatcher *LSTNodeTransformDispatcher[TNodeKind, TAST],
 	kind TNodeKind,
-	handler LSTNodeTransformHandler[TObservation, TToken, TTokenRole, TNodeKind, TAST],
+	handler LSTNodeTransformHandler[TNodeKind, TAST],
 ) {
 	internal.NodeTransformDispatcherRegister(
 		dispatcher.dispatcher,
 		kind,
 		func(
-			ctx *internal.LSTNodeTransformContext[TObservation, TToken, TTokenRole, TNodeKind, TAST],
-			node *syntaxa.SyntaxaLSTNode[TObservation, TToken, TTokenRole, TNodeKind],
+			ctx *internal.LSTNodeTransformContext[TNodeKind, TAST],
+			node *syntaxa.SyntaxaLSTNode[TNodeKind],
 		) TAST {
-			return handler(LSTNodeTransformContext[TObservation, TToken, TTokenRole, TNodeKind, TAST]{ctx: ctx}, node)
+			return handler(LSTNodeTransformContext[TNodeKind, TAST]{ctx: ctx}, node)
 		},
 	)
 }
@@ -109,8 +108,8 @@ Edge cases:
 Time complexity: O(1)
 Space complexity: O(1)
 */
-func LSTNodeTransformDispatcherMarkPopulated[TObservation cmp.Ordered, TToken, TTokenRole, TNodeKind comparable, TAST any](
-	dispatcher *LSTNodeTransformDispatcher[TObservation, TToken, TTokenRole, TNodeKind, TAST],
+func LSTNodeTransformDispatcherMarkPopulated[TNodeKind comparable, TAST any](
+	dispatcher *LSTNodeTransformDispatcher[TNodeKind, TAST],
 ) {
 	internal.NodeTransformDispatcherMarkPopulated(dispatcher.dispatcher)
 }
@@ -127,11 +126,11 @@ Edge cases:
 Time complexity: O(1)
 Space complexity: O(1)
 */
-func LSTNodeTransformContextCreate[TObservation cmp.Ordered, TToken, TTokenRole, TNodeKind comparable, TAST any](
-	dispatcher *LSTNodeTransformDispatcher[TObservation, TToken, TTokenRole, TNodeKind, TAST],
+func LSTNodeTransformContextCreate[TNodeKind comparable, TAST any](
+	dispatcher *LSTNodeTransformDispatcher[TNodeKind, TAST],
 	validationEntries *validation.ValidationEntries,
-) LSTNodeTransformContext[TObservation, TToken, TTokenRole, TNodeKind, TAST] {
-	return LSTNodeTransformContext[TObservation, TToken, TTokenRole, TNodeKind, TAST]{
+) LSTNodeTransformContext[TNodeKind, TAST] {
+	return LSTNodeTransformContext[TNodeKind, TAST]{
 		ctx: internal.LSTNodeTransformContextCreate(dispatcher.dispatcher, validationEntries),
 	}
 }
@@ -156,9 +155,9 @@ Edge cases:
 - Reports a FATAL validation entry if node is nil
 - Returns the zero value of TAST in error cases
 */
-func LSTNodeTransformContextTransform[TObservation cmp.Ordered, TToken, TTokenRole, TNodeKind comparable, TAST any](
-	ctx LSTNodeTransformContext[TObservation, TToken, TTokenRole, TNodeKind, TAST],
-	node *syntaxa.SyntaxaLSTNode[TObservation, TToken, TTokenRole, TNodeKind],
+func LSTNodeTransformContextTransform[TNodeKind comparable, TAST any](
+	ctx LSTNodeTransformContext[TNodeKind, TAST],
+	node *syntaxa.SyntaxaLSTNode[TNodeKind],
 ) TAST {
 	return internal.LSTNodeTransformContextTransform(ctx.ctx, node)
 }
@@ -169,8 +168,8 @@ LSTNodeTransformContextIsValid reports whether ctx can be used for transformatio
 Time complexity: O(1)
 Space complexity: O(1)
 */
-func LSTNodeTransformContextIsValid[TObservation cmp.Ordered, TToken, TTokenRole, TNodeKind comparable, TAST any](
-	ctx LSTNodeTransformContext[TObservation, TToken, TTokenRole, TNodeKind, TAST],
+func LSTNodeTransformContextIsValid[TNodeKind comparable, TAST any](
+	ctx LSTNodeTransformContext[TNodeKind, TAST],
 ) bool {
 	return ctx.ctx != nil
 }
@@ -184,9 +183,9 @@ Use cases:
 Time complexity: O(1)
 Space complexity: O(1) additional (excluding collector growth)
 */
-func LSTNodeTransformContextReport[TObservation cmp.Ordered, TToken, TTokenRole, TNodeKind comparable, TAST any](
-	ctx LSTNodeTransformContext[TObservation, TToken, TTokenRole, TNodeKind, TAST],
-	node *syntaxa.SyntaxaLSTNode[TObservation, TToken, TTokenRole, TNodeKind],
+func LSTNodeTransformContextReport[TNodeKind comparable, TAST any](
+	ctx LSTNodeTransformContext[TNodeKind, TAST],
+	node *syntaxa.SyntaxaLSTNode[TNodeKind],
 	severity validation.ValidationSeverity,
 	code validation.ValidationCode,
 	message string,
@@ -198,9 +197,9 @@ func LSTNodeTransformContextReport[TObservation cmp.Ordered, TToken, TTokenRole,
 /*
 LSTNodeTransformContextReportDiagnostic reports a DIAGNOSTIC entry.
 */
-func LSTNodeTransformContextReportDiagnostic[TObservation cmp.Ordered, TToken, TTokenRole, TNodeKind comparable, TAST any](
-	ctx LSTNodeTransformContext[TObservation, TToken, TTokenRole, TNodeKind, TAST],
-	node *syntaxa.SyntaxaLSTNode[TObservation, TToken, TTokenRole, TNodeKind],
+func LSTNodeTransformContextReportDiagnostic[TNodeKind comparable, TAST any](
+	ctx LSTNodeTransformContext[TNodeKind, TAST],
+	node *syntaxa.SyntaxaLSTNode[TNodeKind],
 	code validation.ValidationCode,
 	message string,
 	note *string,
@@ -211,9 +210,9 @@ func LSTNodeTransformContextReportDiagnostic[TObservation cmp.Ordered, TToken, T
 /*
 LSTNodeTransformContextReportInfo reports an INFO entry.
 */
-func LSTNodeTransformContextReportInfo[TObservation cmp.Ordered, TToken, TTokenRole, TNodeKind comparable, TAST any](
-	ctx LSTNodeTransformContext[TObservation, TToken, TTokenRole, TNodeKind, TAST],
-	node *syntaxa.SyntaxaLSTNode[TObservation, TToken, TTokenRole, TNodeKind],
+func LSTNodeTransformContextReportInfo[TNodeKind comparable, TAST any](
+	ctx LSTNodeTransformContext[TNodeKind, TAST],
+	node *syntaxa.SyntaxaLSTNode[TNodeKind],
 	code validation.ValidationCode,
 	message string,
 	note *string,
@@ -224,9 +223,9 @@ func LSTNodeTransformContextReportInfo[TObservation cmp.Ordered, TToken, TTokenR
 /*
 LSTNodeTransformContextReportNotice reports a NOTICE entry.
 */
-func LSTNodeTransformContextReportNotice[TObservation cmp.Ordered, TToken, TTokenRole, TNodeKind comparable, TAST any](
-	ctx LSTNodeTransformContext[TObservation, TToken, TTokenRole, TNodeKind, TAST],
-	node *syntaxa.SyntaxaLSTNode[TObservation, TToken, TTokenRole, TNodeKind],
+func LSTNodeTransformContextReportNotice[TNodeKind comparable, TAST any](
+	ctx LSTNodeTransformContext[TNodeKind, TAST],
+	node *syntaxa.SyntaxaLSTNode[TNodeKind],
 	code validation.ValidationCode,
 	message string,
 	note *string,
@@ -237,9 +236,9 @@ func LSTNodeTransformContextReportNotice[TObservation cmp.Ordered, TToken, TToke
 /*
 LSTNodeTransformContextReportWarning reports a WARNING entry.
 */
-func LSTNodeTransformContextReportWarning[TObservation cmp.Ordered, TToken, TTokenRole, TNodeKind comparable, TAST any](
-	ctx LSTNodeTransformContext[TObservation, TToken, TTokenRole, TNodeKind, TAST],
-	node *syntaxa.SyntaxaLSTNode[TObservation, TToken, TTokenRole, TNodeKind],
+func LSTNodeTransformContextReportWarning[TNodeKind comparable, TAST any](
+	ctx LSTNodeTransformContext[TNodeKind, TAST],
+	node *syntaxa.SyntaxaLSTNode[TNodeKind],
 	code validation.ValidationCode,
 	message string,
 	note *string,
@@ -250,9 +249,9 @@ func LSTNodeTransformContextReportWarning[TObservation cmp.Ordered, TToken, TTok
 /*
 LSTNodeTransformContextReportError reports an ERROR entry.
 */
-func LSTNodeTransformContextReportError[TObservation cmp.Ordered, TToken, TTokenRole, TNodeKind comparable, TAST any](
-	ctx LSTNodeTransformContext[TObservation, TToken, TTokenRole, TNodeKind, TAST],
-	node *syntaxa.SyntaxaLSTNode[TObservation, TToken, TTokenRole, TNodeKind],
+func LSTNodeTransformContextReportError[TNodeKind comparable, TAST any](
+	ctx LSTNodeTransformContext[TNodeKind, TAST],
+	node *syntaxa.SyntaxaLSTNode[TNodeKind],
 	code validation.ValidationCode,
 	message string,
 	note *string,
@@ -263,9 +262,9 @@ func LSTNodeTransformContextReportError[TObservation cmp.Ordered, TToken, TToken
 /*
 LSTNodeTransformContextReportFatal reports a FATAL entry.
 */
-func LSTNodeTransformContextReportFatal[TObservation cmp.Ordered, TToken, TTokenRole, TNodeKind comparable, TAST any](
-	ctx LSTNodeTransformContext[TObservation, TToken, TTokenRole, TNodeKind, TAST],
-	node *syntaxa.SyntaxaLSTNode[TObservation, TToken, TTokenRole, TNodeKind],
+func LSTNodeTransformContextReportFatal[TNodeKind comparable, TAST any](
+	ctx LSTNodeTransformContext[TNodeKind, TAST],
+	node *syntaxa.SyntaxaLSTNode[TNodeKind],
 	code validation.ValidationCode,
 	message string,
 	note *string,
